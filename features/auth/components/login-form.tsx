@@ -1,5 +1,4 @@
 'use client'
-
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,14 +8,63 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { supabase } from "@/lib/supabase";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const handleGoogleLogin = () => {
-    // Handle Google authentication here
-    console.log('Google login clicked');
+  const router = useRouter();
+
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Initial session:', session);
+
+      // If user is already logged in, redirect to home
+      if (session) {
+        router.replace('/home');
+      }
+    }
+
+    getSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth event:', event, 'Session:', session);
+
+        // Redirect to home when user successfully signs in
+        if (event === 'SIGNED_IN' && session) {
+          router.replace('/home');
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [router]);
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+        // You can add error handling here (toast notification, etc.)
+      }
+
+      // Don't manually redirect here - let the auth state change handler do it
+      console.log('OAuth initiated:', data);
+    } catch (error) {
+      console.error('Unexpected error:', error);
+    }
   };
 
   return (
