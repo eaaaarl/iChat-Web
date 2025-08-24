@@ -106,9 +106,22 @@ export default function HomePage() {
             console.error('Error fetching last message:', messageError)
           }
 
+          // Check if there are unread messages from this profile
+          const { data: unreadCount, error: unreadError } = await supabase
+            .from('conversation')
+            .select('id')
+            .eq('receiver_id', user?.id)
+            .eq('sender_id', profile.id)
+            .eq('read', false)
+
+          if (unreadError) {
+            console.error('Error fetching unread count:', unreadError)
+          }
+
           return {
             ...profile,
             lastMessage: lastMessage || null,
+            unreadCount: unreadCount?.length || 0,
           }
         })
       )
@@ -238,7 +251,8 @@ export default function HomePage() {
               <Link
                 key={chat.id}
                 href={`/conversation/${chat.id}`}
-                className="flex items-center px-4 py-4 active:bg-accent/70 transition-colors touch-manipulation"
+                className={`flex items-center px-4 py-4 active:bg-accent/70 transition-colors touch-manipulation ${chat.unreadCount > 0 ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''
+                  }`}
               >
                 {/* Avatar with online status */}
                 <div className="relative flex-shrink-0">
@@ -257,13 +271,19 @@ export default function HomePage() {
                 {/* Chat Info */}
                 <div className="flex-1 ml-3 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-foreground truncate text-base">
+                    <h3 className={`font-semibold truncate text-base ${chat.unreadCount > 0 ? 'text-foreground font-bold' : 'text-foreground'
+                      }`}>
                       {chat.display_name || chat.name}
                     </h3>
-
+                    {chat.unreadCount > 0 && (
+                      <div className="bg-blue-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center flex-shrink-0">
+                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground truncate flex-1">
+                    <p className={`text-sm truncate flex-1 ${chat.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
+                      }`}>
                       {chat.lastMessage ? (
                         <>
                           {chat.lastMessage.sender_id === user?.id ? 'You: ' : ''}
@@ -273,7 +293,8 @@ export default function HomePage() {
                         'No messages yet'
                       )}
                     </p>
-                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                    <span className={`text-xs ml-2 flex-shrink-0 ${chat.unreadCount > 0 ? 'text-blue-500 font-semibold' : 'text-muted-foreground'
+                      }`}>
                       {chat.lastMessage ?
                         formatTime(chat.lastMessage.created_at) :
                         formatTime(chat.last_seen)

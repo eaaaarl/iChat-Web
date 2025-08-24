@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
+import type { User } from '@supabase/supabase-js'
 
 interface Message {
   id: string
@@ -15,7 +16,6 @@ interface Message {
   created_at: string
   read: boolean
   senderName?: string
-  isRead?: boolean
 }
 
 export default function ConversationPage() {
@@ -24,8 +24,38 @@ export default function ConversationPage() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [currentUser, setCurrentUser] = useState<any | null>(null)
-  const [otherUser, setOtherUser] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [otherUser, setOtherUser] = useState<{ id: string; display_name: string; avatar_url?: string; status?: string } | null>(null);
+
+  const markMessagesAsRead = async (messages: Message[]) => {
+    if (!currentUser || !id) return
+
+    try {
+      // Get unread messages sent to current user
+      const unreadMessages = messages.filter(
+        msg => msg.sender_id === id &&
+          msg.receiver_id === currentUser.id &&
+          !msg.read
+      )
+
+      if (unreadMessages.length > 0) {
+        const messageIds = unreadMessages.map(msg => msg.id)
+
+        const { error } = await supabase
+          .from('conversation')
+          .update({ read: true })
+          .in('id', messageIds)
+
+        if (error) {
+          console.error('Error marking messages as read:', error)
+        } else {
+          console.log('Messages marked as read')
+        }
+      }
+    } catch (error) {
+      console.error('Error marking messages as read:', error)
+    }
+  }
 
   useEffect(() => {
     const getUser = async () => {
@@ -60,6 +90,11 @@ export default function ConversationPage() {
 
       if (!error) {
         setMessages(data || [])
+
+        // Mark messages as read when conversation loads
+        if (data && data.length > 0) {
+          markMessagesAsRead(data)
+        }
       } else {
         console.error('Error fetching messages:', error)
       }
@@ -86,6 +121,11 @@ export default function ConversationPage() {
 
           if (isMyConversation) {
             setMessages(prev => [...prev, message]);
+
+            // If it's a message sent to current user, mark it as read immediately
+            if (message.sender_id === id && message.receiver_id === currentUser.id) {
+              markMessagesAsRead([message]);
+            }
           }
         }
       )
@@ -107,7 +147,7 @@ export default function ConversationPage() {
             sender_id: currentUser?.id,
             receiver_id: id as string,
             content: message.trim(),
-            read: false
+            is_read: false
           })
           .select()
 
@@ -240,7 +280,7 @@ export default function ConversationPage() {
                   }`}>
                   {formatTime(msg.created_at)}
                   {msg.sender_id === currentUser?.id && (
-                    <span className={`ml-2 ${msg.isRead ? 'text-blue-500' : 'text-muted-foreground'}`}>
+                    <span className={`ml-2 ${msg.read ? 'text-blue-500' : 'text-muted-foreground'}`}>
                       ✓✓
                     </span>
                   )}
