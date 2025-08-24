@@ -1,7 +1,6 @@
 'use client'
-
 import React, { useState, useEffect } from 'react'
-import { MessageCircle, Search, Phone, Video, LogOut } from 'lucide-react'
+import { MessageCircle, Search, LogOut, MoreVertical } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -28,12 +27,10 @@ export default function HomePage() {
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-
       if (!session) {
         router.replace('/')
         return
       }
-
       setUser(session.user)
       setUserLoading(false)
     }
@@ -50,7 +47,6 @@ export default function HomePage() {
     )
 
     getUser()
-
     return () => subscription.unsubscribe()
   }, [])
 
@@ -79,9 +75,6 @@ export default function HomePage() {
   const fetchProfiles = async () => {
     try {
       setProfilesLoading(true)
-      console.log('user id ', user?.id)
-
-      // Only add neq filter if user.id exists
       let query = supabase
         .from('profiles')
         .select('*')
@@ -99,8 +92,30 @@ export default function HomePage() {
         return;
       }
 
-      setProfiles(data || []);
-      console.log('Profiles fetched:', data)
+      const profileWithLastMessage = await Promise.all(
+        data.map(async (profile) => {
+          const { data: lastMessage, error: messageError } = await supabase
+            .from('conversation')
+            .select("*")
+            .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${user?.id})`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (messageError && messageError.code !== 'PGRST116') {
+            console.error('Error fetching last message:', messageError)
+          }
+
+          return {
+            ...profile,
+            lastMessage: lastMessage || null,
+          }
+        })
+      )
+
+
+      setProfiles(profileWithLastMessage);
+      console.log('Profiles fetched:', profileWithLastMessage.map(p => p.lastMessage))
     } catch (error) {
       console.error('Error fetching profiles:', error);
     } finally {
@@ -112,7 +127,6 @@ export default function HomePage() {
     chat.display_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-
   const getUserInitials = (name: string | undefined, email: string | undefined) => {
     if (name) {
       return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -123,50 +137,61 @@ export default function HomePage() {
     return 'U'
   }
 
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    const hours = diff / (1000 * 60 * 60)
+
+    if (hours < 24) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    } else if (hours < 48) {
+      return 'Yesterday'
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    }
+  }
+
   if (userLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Header with User Info */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <h1 className="text-2xl font-bold">Chats</h1>
+    <div className="flex flex-col h-screen bg-background max-w-md mx-auto">
+      {/* Mobile Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-background border-b border-border/50 sticky top-0 z-10">
+        <h1 className="text-xl font-semibold text-foreground">Chats</h1>
         <div className="flex items-center space-x-1">
-          <Button variant="ghost" size="icon">
-            <Video className="w-5 h-5" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <Phone className="w-5 h-5" />
-          </Button>
-
-          {/* User Avatar Dropdown */}
+          {/* Menu Button */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-9 w-9">
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-48" align="end">
+              <div className="flex items-center space-x-3 p-3 border-b">
+                <Avatar className="h-10 w-10">
                   <AvatarImage
                     src={user?.user_metadata?.avatar_url}
                     alt={user?.user_metadata?.full_name || user?.email || 'User'}
                   />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                     {getUserInitials(user?.user_metadata?.full_name, user?.email)}
                   </AvatarFallback>
                 </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-              <div className="flex flex-col space-y-1 p-2">
-                <p className="text-sm font-medium leading-none">
-                  {user?.user_metadata?.full_name || 'User'}
-                </p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  {user?.email}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {user?.user_metadata?.full_name || 'User'}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user?.email}
+                  </p>
+                </div>
               </div>
               <DropdownMenuItem
                 onClick={handleSignOut}
@@ -180,8 +205,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="p-4">
+      {/* Mobile Search Bar */}
+      <div className="px-4 py-3 bg-background">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -189,59 +214,71 @@ export default function HomePage() {
             placeholder="Search conversations..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-10 bg-muted/50 border-muted"
           />
         </div>
       </div>
 
-      {/* Chat List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Chat List - Mobile Optimized */}
+      <div className="flex-1 overflow-y-auto overscroll-bounce">
         {profilesLoading ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground px-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-            <p>Loading conversations...</p>
+            <p className="text-center">Loading conversations...</p>
           </div>
         ) : filteredChats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <MessageCircle className="w-12 h-12 mb-4 opacity-50" />
-            <p>No conversations found</p>
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground px-4">
+            <MessageCircle className="w-16 h-16 mb-4 opacity-50" />
+            <p className="text-center text-lg mb-2">No conversations found</p>
+            <p className="text-center text-sm">Start a new chat to get connected</p>
           </div>
         ) : (
-          <div className="space-y-0">
+          <div className="divide-y divide-border/50">
             {filteredChats.map((chat) => (
               <Link
                 key={chat.id}
                 href={`/conversation/${chat.id}`}
-                className="flex items-center p-4 hover:bg-accent cursor-pointer transition-colors border-b border-border/50 last:border-b-0"
+                className="flex items-center px-4 py-4 active:bg-accent/70 transition-colors touch-manipulation"
               >
                 {/* Avatar with online status */}
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                   <Image
                     alt={chat.display_name}
                     src={chat.avatar_url}
-                    width={48}
-                    height={48}
-                    className='rounded-full'
+                    width={52}
+                    height={52}
+                    className="rounded-full"
                   />
                   {chat.status === 'online' && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
+                    <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-green-500 border-2 border-background rounded-full"></div>
                   )}
                 </div>
 
                 {/* Chat Info */}
                 <div className="flex-1 ml-3 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-foreground truncate">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-semibold text-foreground truncate text-base">
                       {chat.display_name || chat.name}
                     </h3>
-                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                      {new Date(chat.last_seen).toLocaleTimeString()}
-                    </span>
+
                   </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-sm text-muted-foreground truncate">
-                      {chat.status === 'online' ? 'Online' : `Last seen: ${new Date(chat.last_seen).toLocaleTimeString()}`}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground truncate flex-1">
+                      {chat.lastMessage ? (
+                        <>
+                          {chat.lastMessage.sender_id === user?.id ? 'You: ' : ''}
+                          {chat.lastMessage.content}
+                        </>
+                      ) : (
+                        'No messages yet'
+                      )}
                     </p>
+                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                      {chat.lastMessage ?
+                        formatTime(chat.lastMessage.created_at) :
+                        formatTime(chat.last_seen)
+                      }
+                    </span>
                   </div>
                 </div>
               </Link>
@@ -250,9 +287,12 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Floating Action Button */}
-      <div className="absolute bottom-6 right-6">
-        <Button size="icon" className="rounded-full h-14 w-14 shadow-lg">
+      {/* Mobile Floating Action Button */}
+      <div className="fixed bottom-6 right-4 z-20">
+        <Button
+          size="icon"
+          className="rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow active:scale-95"
+        >
           <MessageCircle className="w-6 h-6" />
         </Button>
       </div>

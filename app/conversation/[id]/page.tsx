@@ -7,11 +7,22 @@ import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 
+interface Message {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  created_at: string
+  read: boolean
+  senderName?: string
+  isRead?: boolean
+}
+
 export default function ConversationPage() {
   const { id } = useParams()
   const router = useRouter()
   const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState<any[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [currentUser, setCurrentUser] = useState<any | null>(null)
   const [otherUser, setOtherUser] = useState<any | null>(null);
@@ -67,7 +78,7 @@ export default function ConversationPage() {
           table: 'conversation',
         },
         (payload) => {
-          const message = payload.new;
+          const message = payload.new as Message;
 
           const isMyConversation =
             (message.sender_id === currentUser.id && message.receiver_id === id) ||
@@ -191,37 +202,53 @@ export default function ConversationPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg: any) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`max-w-[70%] ${msg.sender_id === currentUser?.id ? 'order-2' : 'order-1'}`}>
-              {msg.senderId !== 'me' && (
-                <p className="text-xs text-muted-foreground mb-1 px-3">
-                  {msg.senderName}
-                </p>
-              )}
-              <div
-                className={`rounded-2xl px-4 py-2 ${msg.sender_id === currentUser?.id
-                  ? 'bg-primary text-primary-foreground rounded-br-md'
-                  : 'bg-muted text-muted-foreground rounded-bl-md'
-                  }`}
-              >
-                <p className="text-sm">{msg.content}</p>
-              </div>
-              <p className={`text-xs text-muted-foreground mt-1 px-3 ${msg.sender_id === currentUser?.id ? 'text-right' : 'text-left'
-                }`}>
-                {formatTime(msg.created_at)}
-                {msg.sender_id === currentUser?.id && (
-                  <span className={`ml-2 ${msg.isRead ? 'text-blue-500' : 'text-muted-foreground'}`}>
-                    ✓✓
-                  </span>
-                )}
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
+              <svg className="w-10 h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-foreground">Start a conversation</h3>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Send a message to {otherUser?.display_name || 'this person'} to start chatting. Your messages are end-to-end encrypted.
               </p>
             </div>
           </div>
-        ))}
+        ) : (
+          messages.map((msg: Message) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`max-w-[70%] ${msg.sender_id === currentUser?.id ? 'order-2' : 'order-1'}`}>
+                {msg.sender_id !== currentUser?.id && (
+                  <p className="text-xs text-muted-foreground mb-1 px-3">
+                    {msg.senderName}
+                  </p>
+                )}
+                <div
+                  className={`rounded-2xl px-4 py-2 ${msg.sender_id === currentUser?.id
+                    ? 'bg-primary text-primary-foreground rounded-br-md'
+                    : 'bg-muted text-muted-foreground rounded-bl-md'
+                    }`}
+                >
+                  <p className="text-sm">{msg.content}</p>
+                </div>
+                <p className={`text-xs text-muted-foreground mt-1 px-3 ${msg.sender_id === currentUser?.id ? 'text-right' : 'text-left'
+                  }`}>
+                  {formatTime(msg.created_at)}
+                  {msg.sender_id === currentUser?.id && (
+                    <span className={`ml-2 ${msg.isRead ? 'text-blue-500' : 'text-muted-foreground'}`}>
+                      ✓✓
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
