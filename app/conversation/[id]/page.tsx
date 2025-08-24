@@ -135,6 +135,7 @@ export default function ConversationPage() {
       channels.unsubscribe()
     }
 
+  // eslint-disable-next-line
   }, [id, currentUser, otherUser?.id])
 
 

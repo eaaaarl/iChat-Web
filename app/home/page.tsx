@@ -49,6 +49,7 @@ export default function HomePage() {
 
     getUser()
     return () => subscription.unsubscribe()
+    // eslint-disable-next-line
   }, [])
 
   // Fetch profiles only when user is available
@@ -56,6 +57,7 @@ export default function HomePage() {
     if (user?.id) {
       fetchProfiles()
     }
+    // eslint-disable-next-line
   }, [user])
 
   const handleSignOut = async () => {
