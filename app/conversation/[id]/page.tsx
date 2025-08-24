@@ -61,9 +61,21 @@ export default function ConversationPage() {
     const channels = supabase.channel('custom-insert-channel')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'conversation' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'conversation',
+        },
         (payload) => {
-          setMessages(prev => [...prev, payload.new])
+          const message = payload.new;
+
+          const isMyConversation =
+            (message.sender_id === currentUser.id && message.receiver_id === id) ||
+            (message.sender_id === id && message.receiver_id === currentUser.id);
+
+          if (isMyConversation) {
+            setMessages(prev => [...prev, message]);
+          }
         }
       )
       .subscribe()
@@ -138,14 +150,19 @@ export default function ConversationPage() {
           </Button>
 
           <div className="relative">
-            <Image
-              alt={otherUser?.display_name || 'image'}
-              src={otherUser?.avatar_url || ''
-              }
-              width={48}
-              height={48}
-              className='rounded-full'
-            />
+            {otherUser?.avatar_url ? (
+              <Image
+                alt={otherUser.display_name}
+                src={otherUser.avatar_url}
+                width={48}
+                height={48}
+                className='rounded-full'
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-lg">
+                {otherUser?.display_name ? otherUser.display_name.charAt(0).toUpperCase() : '?'}
+              </div>
+            )}
             {otherUser?.status === 'online' && (
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
             )}
