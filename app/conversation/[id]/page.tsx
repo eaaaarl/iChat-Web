@@ -11,6 +11,7 @@ export default function ConversationPage() {
   const { id } = useParams()
   const router = useRouter()
   const [message, setMessage] = useState('')
+  const [messages, setMessages] = useState<any[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [currentUser, setCurrentUser] = useState<any | null>(null)
   const [otherUser, setOtherUser] = useState<any | null>(null);
@@ -39,56 +40,62 @@ export default function ConversationPage() {
       }
     }
 
-    fetchOtherUser()
-  }, [id, currentUser])
+    const fetchConversation = async () => {
+      const { data, error } = await supabase
+        .from('conversation')
+        .select('*')
+        .or(`and(sender_id.eq.${currentUser?.id}, receiver_id.eq.${id}), and(sender_id.eq.${id},receiver_id.eq.${currentUser?.id})`)
+        .order('created_at', { ascending: true })
 
-  // Mock messages data
-  const mockMessages = [
-    {
-      id: 1,
-      senderId: 'other',
-      senderName: 'Sarah',
-      content: 'Hey! How are you doing?',
-      timestamp: '10:30 AM',
-      isRead: true
-    },
-    {
-      id: 2,
-      senderId: 'me',
-      content: 'I\'m doing great! Thanks for asking 😊',
-      timestamp: '10:32 AM',
-      isRead: true
-    },
-    {
-      id: 3,
-      senderId: 'other',
-      senderName: 'Sarah',
-      content: 'That\'s wonderful to hear! Are we still on for lunch tomorrow?',
-      timestamp: '10:35 AM',
-      isRead: true
-    },
-    {
-      id: 4,
-      senderId: 'me',
-      content: 'Absolutely! Looking forward to it. Should we meet at the usual place?',
-      timestamp: '10:36 AM',
-      isRead: true
-    },
-    {
-      id: 5,
-      senderId: 'other',
-      senderName: 'Sarah',
-      content: 'Perfect! See you at 12:30 PM at Cafe Central 🍕',
-      timestamp: '10:38 AM',
-      isRead: false
+      if (!error) {
+        setMessages(data || [])
+      } else {
+        console.error('Error fetching messages:', error)
+      }
     }
-  ]
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // Here you would normally send the message to your backend/Supabase
-      console.log('Sending message:', message)
-      setMessage('')
+    fetchOtherUser()
+    fetchConversation()
+
+
+    const channels = supabase.channel('custom-insert-channel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'conversation' },
+        (payload) => {
+          setMessages(prev => [...prev, payload.new])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      channels.unsubscribe()
+    }
+
+  }, [id, currentUser, otherUser?.id])
+
+
+  const handleSendMessage = async () => {
+    if (message.trim() && currentUser && id) {
+      try {
+        const { error } = await supabase
+          .from('conversation')
+          .insert({
+            sender_id: currentUser?.id,
+            receiver_id: id as string,
+            content: message.trim(),
+            read: false
+          })
+          .select()
+
+        if (!error) {
+          setMessage('')
+        } else {
+          console.error('Error sending message:', error)
+        }
+      } catch (error) {
+        console.error('Error sending message:', error)
+      }
     }
   }
 
@@ -105,7 +112,11 @@ export default function ConversationPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [mockMessages])
+  }, [messages])
+
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
 
   /* if (!otherUser) {
     return (
@@ -128,8 +139,9 @@ export default function ConversationPage() {
 
           <div className="relative">
             <Image
-              alt={otherUser?.display_name}
-              src={otherUser?.avatar_url}
+              alt={otherUser?.display_name || 'image'}
+              src={otherUser?.avatar_url || ''
+              }
               width={48}
               height={48}
               className='rounded-full'
@@ -162,29 +174,29 @@ export default function ConversationPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {mockMessages.map((msg: any) => (
+        {messages.map((msg: any) => (
           <div
             key={msg.id}
-            className={`flex ${msg.senderId === 'me' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
           >
-            <div className={`max-w-[70%] ${msg.senderId === 'me' ? 'order-2' : 'order-1'}`}>
+            <div className={`max-w-[70%] ${msg.sender_id === currentUser?.id ? 'order-2' : 'order-1'}`}>
               {msg.senderId !== 'me' && (
                 <p className="text-xs text-muted-foreground mb-1 px-3">
                   {msg.senderName}
                 </p>
               )}
               <div
-                className={`rounded-2xl px-4 py-2 ${msg.senderId === 'me'
+                className={`rounded-2xl px-4 py-2 ${msg.sender_id === currentUser?.id
                   ? 'bg-primary text-primary-foreground rounded-br-md'
                   : 'bg-muted text-muted-foreground rounded-bl-md'
                   }`}
               >
                 <p className="text-sm">{msg.content}</p>
               </div>
-              <p className={`text-xs text-muted-foreground mt-1 px-3 ${msg.senderId === 'me' ? 'text-right' : 'text-left'
+              <p className={`text-xs text-muted-foreground mt-1 px-3 ${msg.sender_id === currentUser?.id ? 'text-right' : 'text-left'
                 }`}>
-                {msg.timestamp}
-                {msg.senderId === 'me' && (
+                {formatTime(msg.created_at)}
+                {msg.sender_id === currentUser?.id && (
                   <span className={`ml-2 ${msg.isRead ? 'text-blue-500' : 'text-muted-foreground'}`}>
                     ✓✓
                   </span>
@@ -203,7 +215,7 @@ export default function ConversationPage() {
             <Paperclip className="w-5 h-5" />
           </Button>
           <Button variant="ghost" size="icon" className="shrink-0">
-            <Image className="w-5 h-5" />
+            {/* <Image className="w-5 h-5" /> */}
           </Button>
 
           <div className="flex-1 relative">
