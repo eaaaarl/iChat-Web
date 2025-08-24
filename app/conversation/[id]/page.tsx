@@ -1,39 +1,46 @@
 'use client'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import React, { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Image, Mic } from 'lucide-react'
+import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Mic } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { supabase } from '@/lib/supabase'
+import Image from 'next/image'
 
 export default function ConversationPage() {
   const { id } = useParams()
+  const router = useRouter()
   const [message, setMessage] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [currentUser, setCurrentUser] = useState<any | null>(null)
+  const [otherUser, setOtherUser] = useState<any | null>(null);
 
-  // Mock conversation data based on ID
-  const conversations = {
-    '1': {
-      name: 'Sarah Wilson',
-      avatar: 'SW',
-      isOnline: true,
-      lastSeen: 'Active now'
-    },
-    '2': {
-      name: 'Dev Team',
-      avatar: 'DT',
-      isOnline: false,
-      lastSeen: '5 members'
-    },
-    '3': {
-      name: 'Mom',
-      avatar: 'M',
-      isOnline: true,
-      lastSeen: 'Active now'
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setCurrentUser(session?.user || null)
     }
-  }
+    getUser()
+  }, [])
+
+  useEffect(() => {
+    if (!currentUser || !id) return
+
+    const fetchOtherUser = async () => {
+      const { data, error } = await supabase.from("profiles")
+        .select("*")
+        .eq('id', id)
+        .single()
+
+      if (!error) {
+        setOtherUser(data)
+      } else {
+        console.error('Error fetching other user', error)
+      }
+    }
+
+    fetchOtherUser()
+  }, [id, currentUser])
 
   // Mock messages data
   const mockMessages = [
@@ -77,21 +84,6 @@ export default function ConversationPage() {
     }
   ]
 
-  const currentConversation = conversations[id as keyof typeof conversations] || {
-    name: 'Unknown User',
-    avatar: 'U',
-    isOnline: false,
-    lastSeen: 'Unknown'
-  }
-
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
-      'bg-indigo-500', 'bg-yellow-500', 'bg-red-500', 'bg-teal-500'
-    ]
-    return colors[name.length % colors.length]
-  }
-
   const handleSendMessage = () => {
     if (message.trim()) {
       // Here you would normally send the message to your backend/Supabase
@@ -115,31 +107,44 @@ export default function ConversationPage() {
     scrollToBottom()
   }, [mockMessages])
 
+  /* if (!otherUser) {
+    return (
+      <div className="flex flex-col h-screen bg-background max-w-md mx-auto items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <p className="mt-4 text-muted-foreground">Loading conversation...</p>
+      </div>
+    )
+  } */
+
+
   return (
     <div className="flex flex-col h-screen bg-background max-w-md mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center space-x-3">
-          <Button variant="ghost" size="icon">
+          <Button onClick={() => { router.push('/home') }} variant="ghost" size="icon">
             <ArrowLeft className="w-5 h-5" />
           </Button>
 
           <div className="relative">
-            <Avatar className={`w-10 h-10 ${getAvatarColor(currentConversation.name)}`}>
-              <AvatarFallback className="text-white font-semibold">
-                {currentConversation.avatar}
-              </AvatarFallback>
-            </Avatar>
-            {currentConversation.isOnline && (
+            <Image
+              alt={otherUser?.display_name}
+              src={otherUser?.avatar_url}
+              width={48}
+              height={48}
+              className='rounded-full'
+            />
+            {otherUser?.status === 'online' && (
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
             )}
+
           </div>
 
           <div>
-            <h2 className="font-semibold text-foreground">{currentConversation.name}</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="font-semibold text-foreground">{otherUser?.display_name}</h2>
+            {/* <p className="text-xs text-muted-foreground">
               {isTyping ? 'typing...' : currentConversation.lastSeen}
-            </p>
+            </p> */}
           </div>
         </div>
 
@@ -156,7 +161,6 @@ export default function ConversationPage() {
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {mockMessages.map((msg: any) => (
           <div

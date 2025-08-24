@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export function LoginForm({
@@ -17,6 +17,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const getSession = async () => {
@@ -31,39 +32,102 @@ export function LoginForm({
 
     getSession();
 
-    // Listen for auth state changes
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log('Auth event:', event, 'Session:', session);
 
-        // Redirect to home when user successfully signs in
-        if (event === 'SIGNED_IN' && session) {
-          router.replace('/home');
-        }
-      }
-    )
+        // Handle successful sign in
+        if (event === 'SIGNED_IN' && session?.user) {
+          try {
+            // Check if profile already exists
+            const { data: existingProfile, error: fetchError } = await supabase
+              .from('profiles') // Note: table name should be 'profiles' not 'profile'
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
 
-    return () => subscription.unsubscribe()
+            if (fetchError && fetchError.code !== 'PGRST116') {
+              console.error('Error checking existing profile:', fetchError);
+              return;
+            }
+
+            // Create profile if it doesn't exist
+            if (!existingProfile) {
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: session.user.id, // This should be id, not user_id
+                  username: session.user.user_metadata.email?.split('@')[0] || session.user.email?.split('@')[0], // Generate username from email
+                  display_name: session.user.user_metadata.full_name || session.user.user_metadata.name || 'Anonymous User',
+                  avatar_url: session.user.user_metadata.avatar_url,
+                  status: 'online',
+                })
+                .select()
+                .single();
+
+              if (profileError) {
+                console.error('Error creating profile:', profileError);
+                // Still redirect even if profile creation fails
+              } else {
+                console.log('Profile created successfully:', profileData);
+              }
+            } else {
+              await supabase.from('profiles')
+                .update({
+                  status: 'online',
+                })
+                .eq('id', session.user.id)
+                .select()
+                .single();
+            }
+            router.replace('/home');
+          } catch (error) {
+            console.error('Error in auth state change:', error);
+            // Still redirect to home even if there's an error
+            router.replace('/');
+          }
+        }
+
+        // Handle sign out
+        if (event === 'SIGNED_OUT') {
+          router.replace('/');
+        }
+
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   const handleGoogleLogin = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `http://192.168.254.166/auth/callback`, // Fixed redirect URL
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       });
 
       if (error) {
         console.error('Login error:', error);
-        // You can add error handling here (toast notification, etc.)
+        setLoading(false);
+        // You might want to show a toast or error message here
+        return;
       }
 
-      // Don't manually redirect here - let the auth state change handler do it
       console.log('OAuth initiated:', data);
     } catch (error) {
       console.error('Unexpected error:', error);
+      setLoading(false);
     }
   };
 
@@ -82,14 +146,24 @@ export function LoginForm({
               variant="outline"
               className="w-full"
               onClick={handleGoogleLogin}
+              disabled={loading}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="mr-2 h-4 w-4">
-                <path
-                  d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                  fill="currentColor"
-                />
-              </svg>
-              Continue with Google
+              {loading ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="mr-2 h-4 w-4">
+                    <path
+                      d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  Continue with Google
+                </>
+              )}
             </Button>
             <div className="text-center text-sm">
               Don&apos;t have an account?{" "}

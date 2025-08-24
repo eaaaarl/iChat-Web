@@ -1,104 +1,139 @@
 'use client'
 
-import React, { useState } from 'react'
-import { MessageCircle, Search, Phone, Video, Settings } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { MessageCircle, Search, Phone, Video, LogOut } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
+import Image from 'next/image'
+import Link from 'next/link'
 
 export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [user, setUser] = useState<User | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
+  const router = useRouter()
+  const [profiles, setProfiles] = useState<any[]>([])
+  const [profilesLoading, setProfilesLoading] = useState(true)
 
-  // Mock chat data
-  const mockChats = [
-    {
-      id: 1,
-      name: 'Sarah Wilson',
-      lastMessage: 'Hey! Are we still on for lunch tomorrow?',
-      timestamp: '2m ago',
-      avatar: 'SW',
-      unreadCount: 2,
-      isOnline: true,
-      isTyping: false
-    },
-    {
-      id: 2,
-      name: 'Dev Team',
-      lastMessage: 'John: The new feature is ready for testing 🚀',
-      timestamp: '15m ago',
-      avatar: 'DT',
-      unreadCount: 5,
-      isOnline: false,
-      isTyping: false
-    },
-    {
-      id: 3,
-      name: 'Mom',
-      lastMessage: 'Don\'t forget to call grandma today ❤️',
-      timestamp: '1h ago',
-      avatar: 'M',
-      unreadCount: 0,
-      isOnline: true,
-      isTyping: true
-    },
-    {
-      id: 4,
-      name: 'Alex Johnson',
-      lastMessage: 'Thanks for helping me with the project!',
-      timestamp: '3h ago',
-      avatar: 'AJ',
-      unreadCount: 0,
-      isOnline: false,
-      isTyping: false
-    },
-    {
-      id: 5,
-      name: 'Book Club',
-      lastMessage: 'Emma: What did everyone think of chapter 3?',
-      timestamp: '1d ago',
-      avatar: 'BC',
-      unreadCount: 12,
-      isOnline: false,
-      isTyping: false
-    },
-    {
-      id: 6,
-      name: 'Mike Chen',
-      lastMessage: 'See you at the gym tonight! 💪',
-      timestamp: '2d ago',
-      avatar: 'MC',
-      unreadCount: 0,
-      isOnline: true,
-      isTyping: false
-    },
-    {
-      id: 7,
-      name: 'Work Updates',
-      lastMessage: 'Lisa: Meeting moved to 3 PM',
-      timestamp: '3d ago',
-      avatar: 'WU',
-      unreadCount: 0,
-      isOnline: false,
-      isTyping: false
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session) {
+        router.replace('/')
+        return
+      }
+
+      setUser(session.user)
+      setUserLoading(false)
     }
-  ]
 
-  const filteredChats = mockChats.filter(chat =>
-    chat.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          router.replace('/')
+        } else if (session) {
+          setUser(session.user)
+          setUserLoading(false)
+        }
+      }
+    )
+
+    getUser()
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Fetch profiles only when user is available
+  useEffect(() => {
+    if (user?.id) {
+      fetchProfiles()
+    }
+  }, [user])
+
+  const handleSignOut = async () => {
+    if (user?.id) {
+      const { data, error } = await supabase.from('profiles').update({
+        status: 'offline',
+        last_seen: new Date().toISOString(),
+      }).eq('id', user?.id)
+      if (error) {
+        console.error('Error updating profile:', error)
+      }
+      console.log('Profile updated:', data)
+    }
+    await supabase.auth.signOut()
+    router.replace('/')
+  }
+
+  const fetchProfiles = async () => {
+    try {
+      setProfilesLoading(true)
+      console.log('user id ', user?.id)
+
+      // Only add neq filter if user.id exists
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .order('status', { ascending: false })
+        .order('last_seen', { ascending: false })
+
+      if (user?.id) {
+        query = query.neq('id', user.id)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching profiles:', error);
+        return;
+      }
+
+      setProfiles(data || []);
+      console.log('Profiles fetched:', data)
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    } finally {
+      setProfilesLoading(false)
+    }
+  }
+
+  const filteredChats = profiles.filter(chat =>
+    chat.display_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
-      'bg-indigo-500', 'bg-yellow-500', 'bg-red-500', 'bg-teal-500'
-    ]
-    return colors[name.length % colors.length]
+
+  const getUserInitials = (name: string | undefined, email: string | undefined) => {
+    if (name) {
+      return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    }
+    if (email) {
+      return email[0].toUpperCase()
+    }
+    return 'U'
+  }
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
+      {/* Header with User Info */}
       <div className="flex items-center justify-between p-4 border-b">
         <h1 className="text-2xl font-bold">Chats</h1>
         <div className="flex items-center space-x-1">
@@ -108,9 +143,40 @@ export default function HomePage() {
           <Button variant="ghost" size="icon">
             <Phone className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon">
-            <Settings className="w-5 h-5" />
-          </Button>
+
+          {/* User Avatar Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage
+                    src={user?.user_metadata?.avatar_url}
+                    alt={user?.user_metadata?.full_name || user?.email || 'User'}
+                  />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {getUserInitials(user?.user_metadata?.full_name, user?.email)}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <div className="flex flex-col space-y-1 p-2">
+                <p className="text-sm font-medium leading-none">
+                  {user?.user_metadata?.full_name || 'User'}
+                </p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  {user?.email}
+                </p>
+              </div>
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="cursor-pointer"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -130,7 +196,12 @@ export default function HomePage() {
 
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto">
-        {filteredChats.length === 0 ? (
+        {profilesLoading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p>Loading conversations...</p>
+          </div>
+        ) : filteredChats.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <MessageCircle className="w-12 h-12 mb-4 opacity-50" />
             <p>No conversations found</p>
@@ -138,18 +209,21 @@ export default function HomePage() {
         ) : (
           <div className="space-y-0">
             {filteredChats.map((chat) => (
-              <div
+              <Link
                 key={chat.id}
+                href={`/conversation/${chat.id}`}
                 className="flex items-center p-4 hover:bg-accent cursor-pointer transition-colors border-b border-border/50 last:border-b-0"
               >
                 {/* Avatar with online status */}
                 <div className="relative">
-                  <Avatar className={`w-12 h-12 ${getAvatarColor(chat.name)}`}>
-                    <AvatarFallback className="text-white font-semibold">
-                      {chat.avatar}
-                    </AvatarFallback>
-                  </Avatar>
-                  {chat.isOnline && (
+                  <Image
+                    alt={chat.display_name}
+                    src={chat.avatar_url}
+                    width={48}
+                    height={48}
+                    className='rounded-full'
+                  />
+                  {chat.status === 'online' && (
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
                   )}
                 </div>
@@ -158,28 +232,19 @@ export default function HomePage() {
                 <div className="flex-1 ml-3 min-w-0">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-foreground truncate">
-                      {chat.name}
+                      {chat.display_name || chat.name}
                     </h3>
                     <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                      {chat.timestamp}
+                      {new Date(chat.last_seen).toLocaleTimeString()}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-sm text-muted-foreground truncate">
-                      {chat.isTyping ? (
-                        <span className="text-blue-600 italic">typing...</span>
-                      ) : (
-                        chat.lastMessage
-                      )}
+                      {chat.status === 'online' ? 'Online' : `Last seen: ${new Date(chat.last_seen).toLocaleTimeString()}`}
                     </p>
-                    {chat.unreadCount > 0 && (
-                      <Badge variant="default" className="ml-2 flex-shrink-0 bg-blue-600 hover:bg-blue-700">
-                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                      </Badge>
-                    )}
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
