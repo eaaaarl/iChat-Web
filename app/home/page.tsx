@@ -21,6 +21,7 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const router = useRouter()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profiles, setProfiles] = useState<any[]>([])
   const [profilesLoading, setProfilesLoading] = useState(true)
 

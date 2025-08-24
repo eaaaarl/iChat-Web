@@ -109,7 +109,7 @@ export function LoginForm({
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `http://192.168.254.166/auth/callback`, // Fixed redirect URL
+          redirectTo: `${window.location.origin}/auth/callback`, // Fixed redirect URL
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

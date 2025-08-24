@@ -1,7 +1,7 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import React, { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Phone, Video, MoreVertical, Send, Smile, Paperclip, Mic } from 'lucide-react'
+import { ArrowLeft, Phone, Video, MoreVertical, Send, Image as ImageIcon, Smile, Paperclip, Mic } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
@@ -147,7 +147,7 @@ export default function ConversationPage() {
             sender_id: currentUser?.id,
             receiver_id: id as string,
             content: message.trim(),
-            is_read: false
+            read: false
           })
           .select()
 
@@ -299,7 +299,7 @@ export default function ConversationPage() {
             <Paperclip className="w-5 h-5" />
           </Button>
           <Button variant="ghost" size="icon" className="shrink-0">
-            {/* <Image className="w-5 h-5" /> */}
+            <ImageIcon className="w-5 h-5" />
           </Button>
 
           <div className="flex-1 relative">
