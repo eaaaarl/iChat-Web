@@ -18,6 +18,46 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [checkingExisting, setCheckingExisting] = useState(false);
+  const [message, setMessage] = useState<string>('');
+
+  // Function to check if user already has a Google account
+  const checkExistingAccount = async () => {
+    try {
+      setCheckingExisting(true);
+      setMessage('Checking for existing account...');
+      
+      // Check if there's already a session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // User already has a session, check if they have a profile
+        const { data: existingProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (existingProfile) {
+          setMessage('Account found! Redirecting...');
+          console.log('User already has profile, redirecting to home');
+          // Add a small delay to show the message
+          setTimeout(() => {
+            router.replace('/home');
+          }, 1000);
+          return;
+        }
+      }
+
+      setMessage('No existing account found. Proceeding with Google sign-in...');
+      // If no existing session, proceed with Google OAuth
+      await handleGoogleLogin();
+    } catch (error) {
+      console.error('Error checking existing account:', error);
+      setMessage('Error checking account. Please try again.');
+      setCheckingExisting(false);
+    }
+  };
 
   useEffect(() => {
     const getSession = async () => {
@@ -100,16 +140,41 @@ export function LoginForm({
     // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
+      setMessage('');
+      setCheckingExisting(false);
+      setLoading(false);
     };
   }, [router]);
 
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
+      setMessage('Initiating Google sign-in...');
+      
+      // First, let's check if there's already a session (user might be partially logged in)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // User already has a session, check if they have a profile
+        const { data: existingProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (existingProfile) {
+          // User already has a profile, just redirect to home
+          console.log('User already has profile, redirecting to home');
+          router.replace('/home');
+          return;
+        }
+      }
+
+      // Proceed with Google OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // Fixed redirect URL
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -119,6 +184,7 @@ export function LoginForm({
 
       if (error) {
         console.error('Login error:', error);
+        setMessage('Error starting Google sign-in. Please try again.');
         setLoading(false);
         // You might want to show a toast or error message here
         return;
@@ -127,6 +193,7 @@ export function LoginForm({
       console.log('OAuth initiated:', data);
     } catch (error) {
       console.error('Unexpected error:', error);
+      setMessage('Unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
@@ -137,7 +204,7 @@ export function LoginForm({
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Welcome back</CardTitle>
           <CardDescription>
-            Login with your Google account to continue
+            Sign in with your Google account. If you already have an account, you&apos;ll be logged in automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,13 +212,13 @@ export function LoginForm({
             <Button
               variant="outline"
               className="w-full"
-              onClick={handleGoogleLogin}
-              disabled={loading}
+              onClick={checkExistingAccount}
+              disabled={loading || checkingExisting}
             >
-              {loading ? (
+              {loading || checkingExisting ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Connecting...
+                  {checkingExisting ? 'Checking account...' : 'Connecting...'}
                 </>
               ) : (
                 <>
@@ -165,6 +232,11 @@ export function LoginForm({
                 </>
               )}
             </Button>
+            {message && (
+              <div className="text-center text-sm text-muted-foreground">
+                {message}
+              </div>
+            )}
             <div className="text-center text-sm">
               Don&apos;t have an account?{" "}
               <a href="#" className="underline underline-offset-4">

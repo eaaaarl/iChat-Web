@@ -121,6 +121,8 @@ export default function HomePage() {
             console.error('Error fetching unread count:', unreadError)
           }
 
+          console.log('unreadcount', unreadCount)
+
           return {
             ...profile,
             lastMessage: lastMessage || null,

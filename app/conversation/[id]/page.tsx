@@ -37,15 +37,15 @@ export default function ConversationPage() {
           msg.receiver_id === currentUser.id &&
           !msg.read
       )
-
+      console.log('unreadMessages', unreadMessages)
       if (unreadMessages.length > 0) {
         const messageIds = unreadMessages.map(msg => msg.id)
-
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('conversation')
           .update({ read: true })
           .in('id', messageIds)
 
+        console.log('updated data', data)
         if (error) {
           console.error('Error marking messages as read:', error)
         } else {
@@ -135,7 +135,7 @@ export default function ConversationPage() {
       channels.unsubscribe()
     }
 
-  // eslint-disable-next-line
+    // eslint-disable-next-line
   }, [id, currentUser, otherUser?.id])
 
 
