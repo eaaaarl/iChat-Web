@@ -1,10 +1,18 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, MoreHorizontal, Phone, Video, Settings, Sun, Moon, MessageCircle, Send, Smile, Paperclip, Camera } from 'lucide-react';
+import { Search, MoreHorizontal, Phone, Video, Settings, Sun, Moon, MessageCircle, Send, Smile, Paperclip, Camera, LogOut } from 'lucide-react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/features/chatList/types/profiles';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 
 
@@ -16,7 +24,8 @@ const MessengerApp = () => {
   const [messages, setMessages] = useState<Record<string, Array<{ id: string; content: string; sender_id: string; created_at: string; read: boolean }>>>({});
   const messagesEndRef = useRef(null);
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null)
+  const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null)
 
   // Helper function to format message time
   const formatMessageTime = (timestamp: string) => {
@@ -45,64 +54,6 @@ const MessengerApp = () => {
     }
   };
 
-  // Mock data for contacts
-  const contacts = [
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Hey! How are you doing today?',
-      time: '2:30 PM',
-      online: true,
-      unread: 3
-    },
-    {
-      id: 2,
-      name: 'Mike Chen',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Thanks for the help yesterday!',
-      time: '1:45 PM',
-      online: false,
-      unread: 0
-    },
-    {
-      id: 3,
-      name: 'Emma Wilson',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'See you at the meeting tomorrow',
-      time: '11:20 AM',
-      online: true,
-      unread: 1
-    },
-    {
-      id: 4,
-      name: 'David Rodriguez',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'The project looks great!',
-      time: 'Yesterday',
-      online: false,
-      unread: 0
-    },
-    {
-      id: 5,
-      name: 'Lisa Park',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Can we reschedule our call?',
-      time: 'Yesterday',
-      online: true,
-      unread: 0
-    },
-    {
-      id: 6,
-      name: 'Team Updates',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'New updates available for review',
-      time: '2 days ago',
-      online: false,
-      unread: 5
-    }
-  ];
-
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -110,6 +61,31 @@ const MessengerApp = () => {
     }
     getCurrentUser()
   }, [])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    const fetchCurrentUserProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching current user profile:', error)
+          return
+        }
+
+        setCurrentUserProfile(data)
+      } catch (error) {
+        console.error('Error fetching current user profile:', error)
+      }
+    }
+
+    fetchCurrentUserProfile()
+  }, [currentUser])
 
   useEffect(() => {
     if (!currentUser) return
@@ -176,8 +152,8 @@ const MessengerApp = () => {
     contact.display_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (): void => {
+    (messagesEndRef.current as HTMLDivElement | null)?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Fetch messages when a chat is selected
@@ -236,7 +212,7 @@ const MessengerApp = () => {
     fetchMessages();
   }, [selectedChat, currentUser]);
 
-  // Real-time message updates
+
   useEffect(() => {
     if (!currentUser) return;
 
@@ -250,15 +226,96 @@ const MessengerApp = () => {
           filter: `sender_id=eq.${currentUser.id} OR receiver_id=eq.${currentUser.id}`
         },
         (payload) => {
-          const newMessage = payload.new as { id: string; content: string; sender_id: string; receiver_id: string; created_at: string; read: boolean };
+          const newMessage = payload.new as {
+            id: string;
+            content: string;
+            sender_id: string;
+            receiver_id: string;
+            created_at: string;
+            read: boolean
+          };
 
           // Determine which conversation this message belongs to
-          const conversationId = newMessage.sender_id === currentUser.id ? newMessage.receiver_id : newMessage.sender_id;
+          const conversationId = newMessage.sender_id === currentUser.id
+            ? newMessage.receiver_id
+            : newMessage.sender_id;
 
+          // Update messages state
           setMessages(prev => ({
             ...prev,
             [conversationId]: [...(prev[conversationId] || []), newMessage]
           }));
+
+          // Update the profiles list with the new last message
+          setProfiles(prev => prev.map(profile => {
+            if (profile.id === conversationId) {
+              return {
+                ...profile,
+                lastMessage: newMessage.content,
+                lastMessageTime: newMessage.created_at,
+                // If the message is from the other user and not read, increment unread count
+                unreadCount: newMessage.sender_id !== currentUser.id && !newMessage.read
+                  ? (profile.unreadCount || 0) + 1
+                  : profile.unreadCount || 0
+              };
+            }
+            return profile;
+          }).sort((a, b) => {
+            // Sort profiles by last message time (most recent first)
+            if (!a.lastMessageTime && !b.lastMessageTime) return 0;
+            if (!a.lastMessageTime) return 1;
+            if (!b.lastMessageTime) return -1;
+            return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+          }));
+
+          // If the message is from someone else and we're not currently chatting with them,
+          // show a notification or update unread count
+          if (newMessage.sender_id !== currentUser.id && selectedChat?.id !== conversationId) {
+            // You can add notification logic here
+            console.log(`New message from user ${conversationId}: ${newMessage.content}`);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'conversation',
+          filter: `receiver_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          // Handle message read status updates
+          const updatedMessage = payload.new as {
+            id: string;
+            content: string;
+            sender_id: string;
+            receiver_id: string;
+            created_at: string;
+            read: boolean
+          };
+
+          // Update the message in the messages state
+          setMessages(prev => {
+            const conversationId = updatedMessage.sender_id;
+            const conversationMessages = prev[conversationId] || [];
+
+            return {
+              ...prev,
+              [conversationId]: conversationMessages.map(msg =>
+                msg.id === updatedMessage.id ? updatedMessage : msg
+              )
+            };
+          });
+
+          // Update unread count in profiles if message was marked as read
+          if (updatedMessage.read) {
+            setProfiles(prev => prev.map(profile =>
+              profile.id === updatedMessage.sender_id
+                ? { ...profile, unreadCount: Math.max((profile.unreadCount || 0) - 1, 0) }
+                : profile
+            ));
+          }
         }
       )
       .subscribe();
@@ -266,7 +323,7 @@ const MessengerApp = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser]);
+  }, [currentUser, selectedChat]);
 
   useEffect(() => {
     scrollToBottom();
@@ -307,18 +364,75 @@ const MessengerApp = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       sendMessage();
     }
   };
 
   return (
-    <div className={`h-screen flex`}>
+    <div className={`h-screen flex bg-gray-50`}>
+      <div className={`w-20 flex flex-col items-center py-4 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {/* Message icon at the top */}
+        <div className={`p-3 rounded-full mb-6 ${darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'} hover:opacity-80 transition-opacity cursor-pointer`}>
+          <MessageCircle size={24} />
+        </div>
+
+        {/* Current user avatar at the bottom */}
+        <div className="mt-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="relative cursor-pointer">
+                <Image
+                  src={currentUserProfile?.avatar_url || '/default-avatar.svg'}
+                  alt="Current User"
+                  className="rounded-full object-cover hover:opacity-80 transition-opacity"
+                  width={48}
+                  height={48}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/default-avatar.svg';
+                  }}
+                />
+                {/* Online status indicator */}
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" side="top">
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {currentUserProfile?.display_name || 'User'}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {currentUser?.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  await supabase.from('profiles')
+                    .update({ status: 'offline' })
+                    .eq('id', currentUserProfile?.id)
+                    .select()
+                    .single()
+                  window.location.href = '/';
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
       {/* Sidebar */}
-      <div className={`w-80 border-r flex flex-col `}>
+      <div className={`w-80 flex flex-col mx-2 my-4 rounded-2xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
         {/* Header */}
-        <div className={`p-4 border-b`}>
+        <div className={`p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-4">
             <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Chats</h1>
             <div className="flex items-center gap-2">
@@ -415,11 +529,11 @@ const MessengerApp = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`flex-1  rounded-b-2xl flex flex-col mx-2 shadow-lg my-4`}>
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 border-b rounded-t-2xl flex items-center justify-between bg-white border-gray-200`}>
               <div className="flex items-center">
                 <Image
                   src={selectedChat.avatar_url || '/default-avatar.svg'}
@@ -486,7 +600,7 @@ const MessengerApp = () => {
             </div>
 
             {/* Message Input */}
-            <div className={`p-4 border-t ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 rounded-b-2xl border-t bg-white `}>
               <div className="flex items-center gap-2">
                 <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
                   <Paperclip size={20} />
@@ -529,7 +643,7 @@ const MessengerApp = () => {
             </div>
           </>
         ) : (
-          <div className={`flex-1 flex items-center justify-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <div className={`flex-1 flex items-center justify-center text-gray-500 bg-white`}>
             <div className="text-center">
               <MessageCircle size={64} className="mx-auto mb-4 opacity-50" />
               <h2 className="text-2xl font-medium mb-2">Welcome to Messenger</h2>
@@ -539,7 +653,7 @@ const MessengerApp = () => {
         )}
       </div>
 
-      <div className={`w-80 border-l flex`}>
+      <div className={`w-80 flex mx-2 my-4 rounded-2xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
         <div className='mt-4 text-center flex flex-col mx-auto items-center gap-2'>
           {selectedChat ? (
             <>
