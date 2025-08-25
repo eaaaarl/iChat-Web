@@ -282,8 +282,8 @@ const MessengerApp = () => {
   };
 
   return (
-    <div className={`h-screen flex`}>
-      <div className={`w-20 border-r flex flex-col items-center py-4 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex bg-gray-50`}>
+      <div className={`w-20 flex flex-col items-center py-4 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         {/* Message icon at the top */}
         <div className={`p-3 rounded-full mb-6 ${darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'} hover:opacity-80 transition-opacity cursor-pointer`}>
           <MessageCircle size={24} />
@@ -309,9 +309,9 @@ const MessengerApp = () => {
         </div>
       </div>
       {/* Sidebar */}
-      <div className={`w-80 border-r flex flex-col `}>
+      <div className={`w-80 flex flex-col mx-2 my-4 rounded-2xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
         {/* Header */}
-        <div className={`p-4 border-b`}>
+        <div className={`p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-4">
             <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Chats</h1>
             <div className="flex items-center gap-2">
@@ -408,11 +408,11 @@ const MessengerApp = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`flex-1 flex flex-col mx-2 rounded-2xl shadow-lg my-4 bg-white`}>
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 border-b flex items-center justify-between bg-white border-gray-200`}>
               <div className="flex items-center">
                 <Image
                   src={selectedChat.avatar_url || '/default-avatar.svg'}
@@ -479,7 +479,7 @@ const MessengerApp = () => {
             </div>
 
             {/* Message Input */}
-            <div className={`p-4 border-t ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 border-t bg-white border-gray-200`}>
               <div className="flex items-center gap-2">
                 <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
                   <Paperclip size={20} />
@@ -522,7 +522,7 @@ const MessengerApp = () => {
             </div>
           </>
         ) : (
-          <div className={`flex-1 flex items-center justify-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <div className={`flex-1 flex items-center justify-center text-gray-500 bg-white`}>
             <div className="text-center">
               <MessageCircle size={64} className="mx-auto mb-4 opacity-50" />
               <h2 className="text-2xl font-medium mb-2">Welcome to Messenger</h2>
@@ -532,7 +532,7 @@ const MessengerApp = () => {
         )}
       </div>
 
-      <div className={`w-80 border-l flex`}>
+      <div className={`w-80 flex mx-2 my-4 rounded-2xl shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
         <div className='mt-4 text-center flex flex-col mx-auto items-center gap-2'>
           {selectedChat ? (
             <>
