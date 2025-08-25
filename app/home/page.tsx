@@ -17,6 +17,7 @@ const MessengerApp = () => {
   const messagesEndRef = useRef(null);
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null)
+  const [currentUserProfile, setCurrentUserProfile] = useState<{ id: string, avatar_url: string } | null>(null)
 
   // Helper function to format message time
   const formatMessageTime = (timestamp: string) => {
@@ -45,64 +46,6 @@ const MessengerApp = () => {
     }
   };
 
-  // Mock data for contacts
-  const contacts = [
-    {
-      id: 1,
-      name: 'Sarah Johnson',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Hey! How are you doing today?',
-      time: '2:30 PM',
-      online: true,
-      unread: 3
-    },
-    {
-      id: 2,
-      name: 'Mike Chen',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Thanks for the help yesterday!',
-      time: '1:45 PM',
-      online: false,
-      unread: 0
-    },
-    {
-      id: 3,
-      name: 'Emma Wilson',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'See you at the meeting tomorrow',
-      time: '11:20 AM',
-      online: true,
-      unread: 1
-    },
-    {
-      id: 4,
-      name: 'David Rodriguez',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'The project looks great!',
-      time: 'Yesterday',
-      online: false,
-      unread: 0
-    },
-    {
-      id: 5,
-      name: 'Lisa Park',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'Can we reschedule our call?',
-      time: 'Yesterday',
-      online: true,
-      unread: 0
-    },
-    {
-      id: 6,
-      name: 'Team Updates',
-      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
-      lastMessage: 'New updates available for review',
-      time: '2 days ago',
-      online: false,
-      unread: 5
-    }
-  ];
-
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -110,6 +53,31 @@ const MessengerApp = () => {
     }
     getCurrentUser()
   }, [])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    const fetchCurrentUserProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching current user profile:', error)
+          return
+        }
+
+        setCurrentUserProfile(data)
+      } catch (error) {
+        console.error('Error fetching current user profile:', error)
+      }
+    }
+
+    fetchCurrentUserProfile()
+  }, [currentUser])
 
   useEffect(() => {
     if (!currentUser) return
@@ -315,6 +283,31 @@ const MessengerApp = () => {
 
   return (
     <div className={`h-screen flex`}>
+      <div className={`w-20 border-r flex flex-col items-center py-4 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {/* Message icon at the top */}
+        <div className={`p-3 rounded-full mb-6 ${darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'} hover:opacity-80 transition-opacity cursor-pointer`}>
+          <MessageCircle size={24} />
+        </div>
+
+        {/* Current user avatar at the bottom */}
+        <div className="mt-auto">
+          <div className="relative">
+            <Image
+              src={currentUserProfile?.avatar_url || '/default-avatar.svg'}
+              alt="Current User"
+              className="rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+              width={48}
+              height={48}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = '/default-avatar.svg';
+              }}
+            />
+            {/* Online status indicator */}
+            <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+          </div>
+        </div>
+      </div>
       {/* Sidebar */}
       <div className={`w-80 border-r flex flex-col `}>
         {/* Header */}
