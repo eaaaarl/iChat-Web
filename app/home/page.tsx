@@ -1,327 +1,594 @@
 'use client'
-import React, { useState, useEffect } from 'react'
-import { MessageCircle, Search, LogOut, MoreVertical } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import type { User } from '@supabase/supabase-js'
-import Image from 'next/image'
-import Link from 'next/link'
 
-export default function HomePage() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [user, setUser] = useState<User | null>(null)
-  const [userLoading, setUserLoading] = useState(true)
-  const router = useRouter()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [profiles, setProfiles] = useState<any[]>([])
-  const [profilesLoading, setProfilesLoading] = useState(true)
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, MoreHorizontal, Phone, Video, Settings, Sun, Moon, MessageCircle, Send, Smile, Paperclip, Camera } from 'lucide-react';
+import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
+import { Profile } from '@/features/chatList/types/profiles';
+
+
+
+const MessengerApp = () => {
+  const [selectedChat, setSelectedChat] = useState<Profile | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [message, setMessage] = useState('');
+  const [darkMode, setDarkMode] = useState(false);
+  const [messages, setMessages] = useState<Record<string, Array<{ id: string; content: string; sender_id: string; created_at: string; read: boolean }>>>({});
+  const messagesEndRef = useRef(null);
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null)
+
+  // Helper function to format message time
+  const formatMessageTime = (timestamp: string) => {
+    const messageDate = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = (now.getTime() - messageDate.getTime()) / (1000 * 60 * 60);
+
+    if (diffInHours < 24) {
+      if (diffInHours < 1) {
+        return 'Just now';
+      }
+      return messageDate.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } else if (diffInHours < 48) {
+      return 'Yesterday';
+    } else if (diffInHours < 168) { // 7 days
+      return messageDate.toLocaleDateString([], { weekday: 'short' });
+    } else {
+      return messageDate.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+  };
+
+  // Mock data for contacts
+  const contacts = [
+    {
+      id: 1,
+      name: 'Sarah Johnson',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'Hey! How are you doing today?',
+      time: '2:30 PM',
+      online: true,
+      unread: 3
+    },
+    {
+      id: 2,
+      name: 'Mike Chen',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'Thanks for the help yesterday!',
+      time: '1:45 PM',
+      online: false,
+      unread: 0
+    },
+    {
+      id: 3,
+      name: 'Emma Wilson',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'See you at the meeting tomorrow',
+      time: '11:20 AM',
+      online: true,
+      unread: 1
+    },
+    {
+      id: 4,
+      name: 'David Rodriguez',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'The project looks great!',
+      time: 'Yesterday',
+      online: false,
+      unread: 0
+    },
+    {
+      id: 5,
+      name: 'Lisa Park',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'Can we reschedule our call?',
+      time: 'Yesterday',
+      online: true,
+      unread: 0
+    },
+    {
+      id: 6,
+      name: 'Team Updates',
+      avatar: 'https://lh3.googleusercontent.com/a/ACg8ocL3iIXluaARL25QdHuXKRRtHF4qODxJGq-N5YN6l3ek4BBLBWU=s96-c',
+      lastMessage: 'New updates available for review',
+      time: '2 days ago',
+      online: false,
+      unread: 5
+    }
+  ];
 
   useEffect(() => {
-    const getUser = async () => {
+    const getCurrentUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        router.replace('/')
-        return
-      }
-      setUser(session.user)
-      setUserLoading(false)
+      setCurrentUser(session?.user || null)
     }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          router.replace('/')
-        } else if (session) {
-          setUser(session.user)
-          setUserLoading(false)
-        }
-      }
-    )
-
-    getUser()
-    return () => subscription.unsubscribe()
-    // eslint-disable-next-line
+    getCurrentUser()
   }, [])
 
-  // Fetch profiles only when user is available
   useEffect(() => {
-    if (user?.id) {
-      fetchProfiles()
+    if (!currentUser) return
+
+    const fetchProfiles = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', currentUser.id) // Exclude current user
+
+        if (error) {
+          console.error('Error fetching profiles', error)
+          return
+        }
+
+        // Fetch last message for each profile
+        const profilesWithLastMessage = await Promise.all(
+          data?.map(async (profile) => {
+            try {
+              const { data: lastMessage, error: messageError } = await supabase
+                .from('conversation')
+                .select('*')
+                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUser.id})`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+
+              if (messageError && messageError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+                console.error('Error fetching last message for profile', profile.id, messageError)
+              }
+
+              return {
+                ...profile,
+                lastMessage: lastMessage?.content || null,
+                lastMessageTime: lastMessage?.created_at || null,
+                unreadCount: 0 // You can implement unread count logic here
+              }
+            } catch (error) {
+              console.error('Error processing profile', profile.id, error)
+              return {
+                ...profile,
+                lastMessage: null,
+                lastMessageTime: null,
+                unreadCount: 0
+              }
+            }
+          }) || []
+        )
+
+        setProfiles(profilesWithLastMessage)
+        console.log('Profiles with last messages:', profilesWithLastMessage)
+      } catch (error) {
+        console.log('Something went wrong fetching profiles', error)
+      }
     }
-    // eslint-disable-next-line
-  }, [user])
 
-  const handleSignOut = async () => {
-    if (user?.id) {
-      const { data, error } = await supabase.from('profiles').update({
-        status: 'offline',
-        last_seen: new Date().toISOString(),
-      }).eq('id', user?.id)
-      if (error) {
-        console.error('Error updating profile:', error)
-      }
-      console.log('Profile updated:', data)
-    }
-    await supabase.auth.signOut()
-    router.replace('/')
-  }
+    fetchProfiles()
+  }, [currentUser])
 
-  const fetchProfiles = async () => {
-    try {
-      setProfilesLoading(true)
-      let query = supabase
-        .from('profiles')
-        .select('*')
-        .order('status', { ascending: false })
-        .order('last_seen', { ascending: false })
 
-      if (user?.id) {
-        query = query.neq('id', user.id)
-      }
 
-      const { data, error } = await query
+  const filteredContacts = profiles.filter(contact =>
+    contact.display_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-      if (error) {
-        console.error('Error fetching profiles:', error);
-        return;
-      }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-      const profileWithLastMessage = await Promise.all(
-        data.map(async (profile) => {
-          const { data: lastMessage, error: messageError } = await supabase
-            .from('conversation')
-            .select("*")
-            .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${user?.id})`)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
+  // Fetch messages when a chat is selected
+  useEffect(() => {
+    if (!selectedChat || !currentUser) return;
 
-          if (messageError && messageError.code !== 'PGRST116') {
-            console.error('Error fetching last message:', messageError)
+    const fetchMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('conversation')
+          .select('*')
+          .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedChat.id}),and(sender_id.eq.${selectedChat.id},receiver_id.eq.${currentUser.id})`)
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching messages:', error);
+          return;
+        }
+
+        setMessages(prev => ({
+          ...prev,
+          [selectedChat.id]: data || []
+        }));
+
+        // Mark messages as read
+        if (data && data.length > 0) {
+          const unreadMessages = data.filter(
+            msg => msg.sender_id === selectedChat.id &&
+              msg.receiver_id === currentUser.id &&
+              !msg.read
+          );
+
+          if (unreadMessages.length > 0) {
+            const messageIds = unreadMessages.map(msg => msg.id);
+            await supabase
+              .from('conversation')
+              .update({ read: true })
+              .in('id', messageIds);
           }
+        }
 
-          // Check if there are unread messages from this profile
-          const { data: unreadCount, error: unreadError } = await supabase
-            .from('conversation')
-            .select('id')
-            .eq('receiver_id', user?.id)
-            .eq('sender_id', profile.id)
-            .eq('read', false)
+        // Update the profile's last message
+        if (data && data.length > 0) {
+          const lastMessage = data[data.length - 1];
+          setProfiles(prev => prev.map(profile =>
+            profile.id === selectedChat.id
+              ? { ...profile, lastMessage: lastMessage.content, lastMessageTime: lastMessage.created_at }
+              : profile
+          ));
+        }
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+      }
+    };
 
-          if (unreadError) {
-            console.error('Error fetching unread count:', unreadError)
-          }
+    fetchMessages();
+  }, [selectedChat, currentUser]);
 
-          console.log('unreadcount', unreadCount)
+  // Real-time message updates
+  useEffect(() => {
+    if (!currentUser) return;
 
-          return {
-            ...profile,
-            lastMessage: lastMessage || null,
-            unreadCount: unreadCount?.length || 0,
-          }
-        })
+    const channel = supabase.channel('conversation-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'conversation',
+          filter: `sender_id=eq.${currentUser.id} OR receiver_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          const newMessage = payload.new as { id: string; content: string; sender_id: string; receiver_id: string; created_at: string; read: boolean };
+
+          // Determine which conversation this message belongs to
+          const conversationId = newMessage.sender_id === currentUser.id ? newMessage.receiver_id : newMessage.sender_id;
+
+          setMessages(prev => ({
+            ...prev,
+            [conversationId]: [...(prev[conversationId] || []), newMessage]
+          }));
+        }
       )
+      .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
 
-      setProfiles(profileWithLastMessage);
-      console.log('Profiles fetched:', profileWithLastMessage.map(p => p.lastMessage))
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
-    } finally {
-      setProfilesLoading(false)
+  useEffect(() => {
+    scrollToBottom();
+  }, [selectedChat, messages]);
+
+  const sendMessage = async () => {
+    if (message.trim() && selectedChat && currentUser) {
+      try {
+        const newMessage = {
+          content: message.trim(),
+          sender_id: currentUser.id,
+          receiver_id: selectedChat.id,
+          read: false,
+          created_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabase
+          .from('conversation')
+          .insert([newMessage])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error sending message:', error);
+          return;
+        }
+
+        // Add the new message to the local state
+        setMessages(prev => ({
+          ...prev,
+          [selectedChat.id]: [...(prev[selectedChat.id] || []), data]
+        }));
+
+        setMessage('');
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
     }
-  }
+  };
 
-  const filteredChats = profiles.filter(chat =>
-    chat.display_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const getUserInitials = (name: string | undefined, email: string | undefined) => {
-    if (name) {
-      return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      sendMessage();
     }
-    if (email) {
-      return email[0].toUpperCase()
-    }
-    return 'U'
-  }
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const hours = diff / (1000 * 60 * 60)
-
-    if (hours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-    } else if (hours < 48) {
-      return 'Yesterday'
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    }
-  }
-
-  if (userLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-background max-w-md mx-auto">
-      {/* Mobile Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-background border-b border-border/50 sticky top-0 z-10">
-        <h1 className="text-xl font-semibold text-foreground">Chats</h1>
-        <div className="flex items-center space-x-1">
-          {/* Menu Button */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <MoreVertical className="w-5 h-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-48" align="end">
-              <div className="flex items-center space-x-3 p-3 border-b">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage
-                    src={user?.user_metadata?.avatar_url}
-                    alt={user?.user_metadata?.full_name || user?.email || 'User'}
-                  />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                    {getUserInitials(user?.user_metadata?.full_name, user?.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {user?.user_metadata?.full_name || 'User'}
+    <div className={`h-screen flex`}>
+      {/* Sidebar */}
+      <div className={`w-80 border-r flex flex-col `}>
+        {/* Header */}
+        <div className={`p-4 border-b`}>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Chats</h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}
+              >
+                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+              <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                <Settings size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className={`absolute left-3 top-3 w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-4 py-2.5 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode
+                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                : 'bg-gray-100 border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+            />
+          </div>
+        </div>
+
+        {/* Chat List */}
+        <div className="flex-1 overflow-y-auto">
+          {filteredContacts.map((contact) => (
+            <div
+              key={contact.id}
+              onClick={() => setSelectedChat(contact)}
+              className={`flex items-center p-4 cursor-pointer transition-colors ${selectedChat?.id === contact.id
+                ? darkMode ? 'bg-gray-700' : 'bg-blue-50'
+                : darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                }`}
+            >
+              <div className="relative">
+                <Image
+                  src={contact.avatar_url || '/default-avatar.svg'}
+                  alt={contact.display_name}
+                  className="rounded-full object-cover"
+                  width={48}
+                  height={48}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/default-avatar.svg';
+                  }}
+                />
+                {contact.status === 'online' && (
+                  <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                )}
+              </div>
+
+              <div className="flex-1 ml-3 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h3 className={`font-medium truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {contact.display_name}
+                  </h3>
+                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {contact.status === 'online' ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+                {contact.lastMessage ? (
+                  <div className="flex items-center justify-between">
+                    <p className={`text-sm truncate ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {contact.lastMessage}
+                    </p>
+                    {contact.lastMessageTime && (
+                      <span className={`text-xs ml-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {formatMessageTime(contact.lastMessageTime)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    No messages yet
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user?.email}
+                )}
+                {(contact.unreadCount || 0) > 0 && (
+                  <span className="ml-2 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {contact.unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className={`flex-1 flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {selectedChat ? (
+          <>
+            {/* Chat Header */}
+            <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+              <div className="flex items-center">
+                <Image
+                  src={selectedChat.avatar_url || '/default-avatar.svg'}
+                  alt={selectedChat.display_name}
+                  className="rounded-full object-cover"
+                  width={40}
+                  height={40}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/default-avatar.svg';
+                  }}
+                />
+                <div className="ml-3">
+                  <h2 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {selectedChat.display_name}
+                  </h2>
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {selectedChat.status === 'online' ? 'Active now' : 'Last seen recently'}
                   </p>
                 </div>
               </div>
-              <DropdownMenuItem
-                onClick={handleSignOut}
-                className="cursor-pointer"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
 
-      {/* Mobile Search Bar */}
-      <div className="px-4 py-3 bg-background">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-10 bg-muted/50 border-muted"
-          />
-        </div>
-      </div>
+              <div className="flex items-center gap-2">
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <Phone size={20} />
+                </button>
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <Video size={20} />
+                </button>
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <MoreHorizontal size={20} />
+                </button>
+              </div>
+            </div>
 
-      {/* Chat List - Mobile Optimized */}
-      <div className="flex-1 overflow-y-auto overscroll-bounce">
-        {profilesLoading ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground px-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-            <p className="text-center">Loading conversations...</p>
-          </div>
-        ) : filteredChats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground px-4">
-            <MessageCircle className="w-16 h-16 mb-4 opacity-50" />
-            <p className="text-center text-lg mb-2">No conversations found</p>
-            <p className="text-center text-sm">Start a new chat to get connected</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/50">
-            {filteredChats.map((chat) => (
-              <Link
-                key={chat.id}
-                href={`/conversation/${chat.id}`}
-                className={`flex items-center px-4 py-4 active:bg-accent/70 transition-colors touch-manipulation ${chat.unreadCount > 0 ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''
-                  }`}
-              >
-                {/* Avatar with online status */}
-                <div className="relative flex-shrink-0">
-                  <Image
-                    alt={chat.display_name}
-                    src={chat.avatar_url}
-                    width={52}
-                    height={52}
-                    className="rounded-full"
-                  />
-                  {chat.status === 'online' && (
-                    <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-green-500 border-2 border-background rounded-full"></div>
-                  )}
-                </div>
-
-                {/* Chat Info */}
-                <div className="flex-1 ml-3 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className={`font-semibold truncate text-base ${chat.unreadCount > 0 ? 'text-foreground font-bold' : 'text-foreground'
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {(messages[selectedChat.id] || []).map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender_id === currentUser?.id
+                      ? 'bg-blue-500 text-white'
+                      : darkMode
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-white text-gray-900 shadow-sm'
+                      }`}
+                  >
+                    <p>{msg.content}</p>
+                    <p className={`text-xs mt-1 ${msg.sender_id === currentUser?.id
+                      ? 'text-blue-100'
+                      : darkMode
+                        ? 'text-gray-400'
+                        : 'text-gray-500'
                       }`}>
-                      {chat.display_name || chat.name}
-                    </h3>
-                    {chat.unreadCount > 0 && (
-                      <div className="bg-blue-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center flex-shrink-0">
-                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm truncate flex-1 ${chat.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
-                      }`}>
-                      {chat.lastMessage ? (
-                        <>
-                          {chat.lastMessage.sender_id === user?.id ? 'You: ' : ''}
-                          {chat.lastMessage.content}
-                        </>
-                      ) : (
-                        'No messages yet'
-                      )}
+                      {formatMessageTime(msg.created_at)}
                     </p>
-                    <span className={`text-xs ml-2 flex-shrink-0 ${chat.unreadCount > 0 ? 'text-blue-500 font-semibold' : 'text-muted-foreground'
-                      }`}>
-                      {chat.lastMessage ?
-                        formatTime(chat.lastMessage.created_at) :
-                        formatTime(chat.last_seen)
-                      }
-                    </span>
                   </div>
                 </div>
-              </Link>
-            ))}
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <div className={`p-4 border-t ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+              <div className="flex items-center gap-2">
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <Paperclip size={20} />
+                </button>
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <Camera size={20} />
+                </button>
+
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    placeholder="Type a message..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className={`w-full px-4 py-2 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500 ${darkMode
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-gray-100 border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                  />
+                </div>
+
+                <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
+                  <Smile size={20} />
+                </button>
+
+                <button
+                  onClick={sendMessage}
+                  disabled={!message.trim()}
+                  className={`p-2 rounded-full ${message.trim()
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : darkMode
+                      ? 'text-gray-500'
+                      : 'text-gray-400'
+                    }`}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={`flex-1 flex items-center justify-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <div className="text-center">
+              <MessageCircle size={64} className="mx-auto mb-4 opacity-50" />
+              <h2 className="text-2xl font-medium mb-2">Welcome to Messenger</h2>
+              <p>Select a conversation to start chatting</p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Mobile Floating Action Button */}
-      <div className="fixed bottom-6 right-4 z-20">
-        <Button
-          size="icon"
-          className="rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow active:scale-95"
-        >
-          <MessageCircle className="w-6 h-6" />
-        </Button>
+      <div className={`w-80 border-l flex`}>
+        <div className='mt-4 text-center flex flex-col mx-auto items-center gap-2'>
+          {selectedChat ? (
+            <>
+              <Image
+                alt={selectedChat.display_name}
+                src={selectedChat.avatar_url || '/default-avatar.svg'}
+                height={80}
+                width={80}
+                className='rounded-full object-cover'
+                onError={(e) => {
+                  // Fallback to default avatar if image fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/default-avatar.svg';
+                }}
+              />
+              <div className='space-y-1'>
+                <h3 className='text-blue-600'>{selectedChat.display_name}</h3>
+                <p className='text-sm text-muted-foreground'>@{selectedChat.username || 'user'}</p>
+                <p className='text-sm'>
+                  {selectedChat.status === 'online' ? 'Active now' : 'Last seen recently'}
+                </p>
+                {selectedChat.lastMessage && (
+                  <div className='mt-2 p-2 bg-gray-50 rounded-lg'>
+                    <p className='text-xs text-gray-600 font-medium'>Last message:</p>
+                    <p className='text-sm text-gray-800 truncate'>{selectedChat.lastMessage}</p>
+                    {selectedChat.lastMessageTime && (
+                      <p className='text-xs text-gray-500 mt-1'>
+                        {formatMessageTime(selectedChat.lastMessageTime)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className='w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center'>
+                <MessageCircle size={32} className='text-gray-400' />
+              </div>
+              <div className='space-y-1'>
+                <h3 className='text-gray-600'>No chat selected</h3>
+                <p className='text-sm text-muted-foreground'>Select a conversation to view details</p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default MessengerApp;

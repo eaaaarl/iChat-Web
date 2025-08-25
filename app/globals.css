@@ -119,4 +119,18 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Prevent horizontal overflow */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  
+  /* Ensure proper mobile viewport handling */
+  @media (max-width: 640px) {
+    body {
+      padding: 0;
+      margin: 0;
+    }
+  }
 }
