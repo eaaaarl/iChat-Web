@@ -144,8 +144,8 @@ const MessengerApp = () => {
     contact.display_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (): void => {
+    (messagesEndRef.current as HTMLDivElement | null)?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Fetch messages when a chat is selected
@@ -227,6 +227,7 @@ const MessengerApp = () => {
             ...prev,
             [conversationId]: [...(prev[conversationId] || []), newMessage]
           }));
+
         }
       )
       .subscribe();
@@ -275,7 +276,7 @@ const MessengerApp = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       sendMessage();
     }
@@ -408,11 +409,11 @@ const MessengerApp = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col mx-2 rounded-2xl shadow-lg my-4 bg-white`}>
+      <div className={`flex-1  rounded-b-2xl flex flex-col mx-2 shadow-lg my-4`}>
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className={`p-4 border-b flex items-center justify-between bg-white border-gray-200`}>
+            <div className={`p-4 border-b rounded-t-2xl flex items-center justify-between bg-white border-gray-200`}>
               <div className="flex items-center">
                 <Image
                   src={selectedChat.avatar_url || '/default-avatar.svg'}
@@ -479,7 +480,7 @@ const MessengerApp = () => {
             </div>
 
             {/* Message Input */}
-            <div className={`p-4 border-t bg-white border-gray-200`}>
+            <div className={`p-4 rounded-b-2xl border-t bg-white `}>
               <div className="flex items-center gap-2">
                 <button className={`p-2 rounded-full hover:bg-opacity-10 ${darkMode ? 'hover:bg-white text-gray-300' : 'hover:bg-gray-200 text-gray-600'}`}>
                   <Paperclip size={20} />
